@@ -1,0 +1,75 @@
+name: Deploy Portfolio
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout deployment repository
+        uses: actions/checkout@v4
+
+      - name: Checkout Lovable portfolio
+        uses: actions/checkout@v4
+        with:
+          repository: therarearya/aryakamble
+          path: source
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: source
+        run: bun install --frozen-lockfile
+
+      - name: Build portfolio
+        working-directory: source
+        run: bun run build
+
+      - name: Select website files
+        run: |
+          if [ -d "source/.output/public" ]; then
+            echo "PUBLISH_DIR=source/.output/public" >> "$GITHUB_ENV"
+          elif [ -d "source/dist" ]; then
+            echo "PUBLISH_DIR=source/dist" >> "$GITHUB_ENV"
+          else
+            echo "No website output found"
+            exit 1
+          fi
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ env.PUBLISH_DIR }}
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        
